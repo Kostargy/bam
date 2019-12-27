@@ -19,3 +19,6 @@ The order of the files can be changed with a simple drag and drop.
 Because the chrome extension does not allow io it must be connected to cloud and with a subscription.
 
 The app can also include a in-app browser
+
+## The actions might have a lifo structure
+For multiple actions on the same project, maybe a order drag. for this case the actions.act file is not sificient
