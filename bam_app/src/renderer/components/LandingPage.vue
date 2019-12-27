@@ -57,15 +57,16 @@
       </md-list>
     </md-drawer>
 
-    <md-content>
+    <md-content class='md-scrollbar'>
     <input type="file" @change="showFiles" webkitdirectory>
     <div class="md-layout">
       <div class="md-layout-item" v-click-outside="closeAbstractTextArea">
         <p class="abstract-container" @click='editAbstract' v-show='!showAbstractTextArea'>
-          {{ getCurrenctAbstract() }}
+          <vue-markdown :source='getCurrenctAbstract()'>
+          </vue-markdown>
         </p>
         <md-field v-show='showAbstractTextArea'>
-          <md-textarea v-model="currenctAbstract" @keyup.enter="showAbstractTextArea = false"></md-textarea>
+          <md-textarea class="abstract-input" v-model="currenctAbstract" @keyup.enter="showAbstractTextArea = false"></md-textarea>
         </md-field>
       </div>
     </div>
@@ -107,8 +108,9 @@
   import TreeView from './TreeView';
   import { mapState } from 'vuex';
   import Vue from 'vue';
-
-  const fs = require('fs');
+  import VueMarkdown from 'vue-markdown';
+  import fs from 'fs';
+  //const fs = require('fs');
 
 Vue.directive('click-outside', {
   bind: function (el, binding, vnode) {
@@ -126,7 +128,7 @@ Vue.directive('click-outside', {
 
   export default {
     name: 'landing-page',
-    components: { TreeView },
+    components: { TreeView, VueMarkdown },
     data() {
       return {
         dir_path: null,
@@ -169,6 +171,7 @@ Vue.directive('click-outside', {
         this.showNextActionTextBox = false;
       },
       getCurrenctAbstract() {
+        // if the abstract for a project is empty show the text area
         if(this.currenctAbstract.length < 1){
           this.showAbstractTextArea = true;
         }
@@ -259,7 +262,7 @@ Vue.directive('click-outside', {
 <style>
 
   .page-container {
-    overflow: hidden;
+    /*overflow: hidden;*/
     border: 1px solid rgba(#000, .12);
   }
 
@@ -270,6 +273,7 @@ Vue.directive('click-outside', {
 
   .md-content {
     padding: 16px;
+    overflow: auto !important;
   }
 
   .abstract-container {
@@ -278,6 +282,10 @@ Vue.directive('click-outside', {
 
   .abstract-container:hover{
     cursor: pointer;
+  }
+
+  .abstract-input {
+    min-height: 500px !important;
   }
 
 </style>

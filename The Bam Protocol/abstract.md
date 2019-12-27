@@ -40,4 +40,6 @@ The systax of the actions.txt
 ```
 ### Attachments directory
 The attachment directory has all the files that are connected and referenced in a given project.
+### Sub Projects
+The sub projects have exaclty the same file structure as the parent Project. A project can be broken up into smaller sub projects with their own actions.
 

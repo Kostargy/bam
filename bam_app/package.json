@@ -55,6 +55,7 @@
     "directory-tree": "^2.2.4",
     "vue": "^2.5.16",
     "vue-electron": "^1.0.6",
+    "vue-markdown": "^2.2.4",
     "vue-material": "^1.0.0-beta-11",
     "vue-router": "^3.0.1",
     "vuex": "^3.0.1",
