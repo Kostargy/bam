@@ -4,7 +4,7 @@
       <md-button class="md-icon-button" @click="showNavigation = true">
         <md-icon>menu</md-icon>
       </md-button>
-      <span class="md-title">{{ currenctProjectTitle }}</span>
+      <span class="md-title">{{ currenctProjectTitle }} - {{currenctProject.path}}</span>
 
       <div class="md-toolbar-section-end">
         <md-button @click="showSidepanel = true">Attachments</md-button>
@@ -61,6 +61,7 @@
     <input type="file" @change="showFiles" webkitdirectory>
     <div class="md-layout">
       <div class="md-layout-item" v-click-outside="closeAbstractTextArea">
+        <markdown-cheatsheet></markdown-cheatsheet>
         <p class="abstract-container" @click='editAbstract' v-show='!showAbstractTextArea'>
           <vue-markdown :source='getCurrenctAbstract()'>
           </vue-markdown>
@@ -71,31 +72,39 @@
       </div>
     </div>
     <div class="md-layout" v-click-outside='closeNextActionTextBox'>
-      <div class="md-layout-item" >
+      <div class="md-layout-item md-size-20" >
         <div class="md-layout">
-          <div class="md-layout-item">
+          <div class="md-layout-item md-size-90">
             <md-checkbox v-model="nextActionCheckbox" v-show='!showNextActionTextBox'>{{nextAction}}</md-checkbox>
             <md-field v-show='showNextActionTextBox'>
               <label>Next Action</label>
-              <md-input v-model="nextAction"  @keyup.enter="showNextActionTextBox = false"></md-input>
+              <md-input v-model="nextAction"  @keyup.enter="closeNextActionTextBox"></md-input>
             </md-field>
           </div>
+        <div class="md-layout-item" @click='editNextAction'>
+          <md-icon class="edit-action-icon">{{getNextActionIcon()}}</md-icon>
+        </div>
         </div>
         <div class="md-layout">
           <div class="md-layout-item">
             <md-button class="md-raised" :disabled='!nextActionCheckbox'>Create Action</md-button>
           </div>
           <div class="md-layout-item">
-            <md-button class="md-raised">Delete Action</md-button>
+            <md-button class="md-raised" @click="deleteLastAction">Delete Action</md-button>
           </div>
         </div>
       </div>
-      <div class="md-layout-item" @click='editNextAction'>
-        <md-icon >edit</md-icon>
-      </div>
-      <div class="md-layout-item">
+      <div class="md-layout-item" @click="showNewChildProjectDialog = true">
         <md-icon>library_add</md-icon>
         <md-tooltip md-direction="top">Make this action a project</md-tooltip>
+        <md-dialog-prompt class='create-project-dialog'
+          :md-active.sync="showNewChildProjectDialog"
+          v-model="nextAction"
+          md-title="Project Name"
+          md-input-maxlength="40"
+          md-input-placeholder="Type the project's name"
+          md-confirm-text="Save"
+          @md-confirm='createSubProject' />
       </div>
     </div>
     </md-content>
@@ -109,6 +118,7 @@
   import { mapState } from 'vuex';
   import Vue from 'vue';
   import VueMarkdown from 'vue-markdown';
+  import MarkdownCheatsheet from './MarkdownCheatsheet';
   import fs from 'fs';
   //const fs = require('fs');
 
@@ -128,7 +138,7 @@ Vue.directive('click-outside', {
 
   export default {
     name: 'landing-page',
-    components: { TreeView, VueMarkdown },
+    components: { TreeView, VueMarkdown, MarkdownCheatsheet },
     data() {
       return {
         dir_path: null,
@@ -141,12 +151,17 @@ Vue.directive('click-outside', {
         showAbstractTextArea: false,
         showNextActionTextBox: false,
         nextActionCheckbox: false,
-        nextAction: 'Test Action',
+        showNewChildProjectDialog: false,
+        nextAction: '',
       }
     },
     methods: {
       showFiles(e) {
         let path = e.target.files[0].path;
+        this.dir_path = path;
+        this.updateFiles(path);
+      },
+      updateFiles(path){
         console.log(path);
         let tree = dirTree(path);
         console.log(tree);
@@ -163,12 +178,18 @@ Vue.directive('click-outside', {
         this.showAbstractTextArea = false;
       },
       editNextAction() {
-        console.log('hey');
-        
-        this.showNextActionTextBox = true;
+        if(this.showNextActionTextBox){
+          this.closeNextActionTextBox()
+        }else{
+          this.showNextActionTextBox = !this.showNextActionTextBox;
+        }
       },
       closeNextActionTextBox () {
+        if(this.nextAction.length < 1){
+          return;
+        }
         this.showNextActionTextBox = false;
+        //write next action to file here
       },
       getCurrenctAbstract() {
         // if the abstract for a project is empty show the text area
@@ -176,7 +197,118 @@ Vue.directive('click-outside', {
           this.showAbstractTextArea = true;
         }
         return this.currenctAbstract;
-      }
+      },
+      getNextActionIcon() {
+        if(this.showNextActionTextBox){
+          return 'done';
+        }else{
+          return 'edit';
+        }
+      },
+      deleteLastAction() {
+        this.removeLastAction();
+      },
+      removeLastAction(path){
+        let actions_file_path = null;
+        if(!path){
+          //remove action from project/subproject root
+          actions_file_path = this.currenctProject.path + '/actions.act';
+        }else{
+          actions_file_path = path;
+        }
+        if(!actions_file_path){
+          return;
+        }
+        fs.readFile(actions_file_path, 'utf8', function(err, data){
+            let splitArray = data.split('\n');
+            splitArray.pop();
+            let result = splitArray.join('\n');
+            fs.writeFile(actions_file_path, result);
+        });
+        this.nextActionCheckbox = false;
+        this.showNextActionTextBox = true;
+        this.nextAction = null;
+      },
+      createSubProject(value) {
+        this.createProject(value);
+        this.updateFiles(this.dir_path);
+        // delete last action and show the last completed action
+        let actions_file_path = this.currenctProject.path + '/actions.act';
+        this.removeLastAction(path);
+        this.fetchLastAction(path);
+      },
+      createProject(name) {
+        let self = this;
+        let sub_project_root = this.currenctProject.path+ '/'+name;
+        let attachments_dir = sub_project_root+'/attachments';
+        this.ensureExists( sub_project_root, function(err) {
+            if (err) console.log('error');
+            else console.log('folder created');
+            self.ensureExists(attachments_dir, function(err) {
+                if (err) console.log('error');
+                else console.log('attachments dir created');
+                fs.closeSync(fs.openSync(sub_project_root+'/abstract.md', 'a'));
+                fs.closeSync(fs.openSync(sub_project_root+'/actions.txt', 'a'));
+                fs.closeSync(fs.openSync(attachments_dir+'/links.txt', 'a'));
+            });
+            if(name.includes('brainstorming')){
+              return;
+            }else{
+              self.createSubProject(name+'/brainstorming');
+            }
+        });
+      },
+      ensureExists(path, mask, cb) {
+          if (typeof mask == 'function') { // allow the `mask` parameter to be optional
+              cb = mask;
+              mask = '0777';
+          }
+          fs.mkdir(path, mask, function(err) {
+              if (err) {
+                  if (err.code == 'EEXIST') cb(null); // ignore the error if the folder already exists
+                  else cb(err); // something else went wrong
+              } else cb(null); // successfully created folder
+          });
+      },
+      fetchLastAction(path) {
+        let self = this;
+          let action_txt = null;
+          fs.readFile(path, function(err,data){
+              if(!err){
+                try {
+                  action_txt = data.toString().split('\n');
+                } catch (error) {
+                  self.nextAction = null;
+                  self.showNextActionTextBox = true;
+                  return;
+                }
+              }
+              console.log(action_txt);
+
+              if (action_txt == null || action_txt[0] == '') {
+                self.showNextActionTextBox = true;
+                self.nextAction = null;
+                return;
+              }
+              let next_action = action_txt[action_txt.length-1];
+              if(next_action == ''){
+                next_action = action_txt[action_txt.length-2];
+              }
+              let next_action_checkbox = next_action.split(']')[0];
+              if(next_action_checkbox.length >= 2){
+                self.nextActionCheckbox = true;
+              }else{
+                self.nextActionCheckbox = false;
+              }
+
+              self.nextAction = next_action.substring(
+                  next_action.lastIndexOf("]") + 1,
+                  next_action.lastIndexOf("//")
+              );
+              //self.currenctAbstract = abstract_txt;
+
+          });
+      },
     },
     computed: mapState({
         currenctProjectTitle: function(state){
@@ -195,7 +327,6 @@ Vue.directive('click-outside', {
           let actions_file_path = '';
           let self = this;
           let abstract_txt = 'No Abstract';
-          let action_txt = 'No action';
           if (newProject) {
             abstract_file_path = newProject.path + '/abstract.md';
             actions_file_path = newProject.path + '/actions.act';
@@ -207,41 +338,14 @@ Vue.directive('click-outside', {
                 self.currenctAbstract = abstract_txt;
 
             });
-            fs.readFile(actions_file_path, function(err,data)
-            {
-                if(!err){
-                  try {
-                    action_txt = data.toString().split('\n');
-                  } catch (error) {
-                    self.nextAction = null;
-                    self.showNextActionTextBox = true;
-                    return;
-                  }
-                }
-                if (action_txt.length <= 1 || action_txt == 'No action') {
-                  self.showNextActionTextBox = true;
-                  self.nextAction = null;
-                  return;
-                }
-                console.log(action_txt.length);
-                let next_action = action_txt[action_txt.length-1];
-                if(next_action == ''){
-                  next_action = action_txt[action_txt.length-2];
-                }
-                let next_action_checkbox = next_action.split(']')[0];
-                if(next_action_checkbox.length >= 2){
-                  self.nextActionCheckbox = true;
-                }else{
-                  self.nextActionCheckbox = false;
-                }
-
-                self.nextAction = next_action.substring(
-                    next_action.lastIndexOf("]") + 1,
-                    next_action.lastIndexOf("//")
-                );
-                //self.currenctAbstract = abstract_txt;
-
-            });
+            self.fetchLastAction(actions_file_path);
+          }
+        },
+        nextAction(oldValue, newValue) {
+          if(!newValue){
+            this.showNextActionTextBox = true;
+          }else{
+            // write next action to file
           }
         },
         showAbstractTextArea(oldValue, newValue){
@@ -287,5 +391,15 @@ Vue.directive('click-outside', {
   .abstract-input {
     min-height: 500px !important;
   }
+  .edit-action-icon{
+    position: relative;
+    top: calc(50% - 12px);
+  }
+  .edit-action-icon:hover{
+    cursor: pointer;
+  }
 
+  .create-project-dialog{
+    width: 400px;
+  }
 </style>
