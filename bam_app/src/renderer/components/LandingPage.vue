@@ -75,10 +75,10 @@
       <div class="md-layout-item md-size-20" >
         <div class="md-layout">
           <div class="md-layout-item md-size-90">
-            <md-checkbox v-model="nextActionCheckbox" v-show='!showNextActionTextBox'>{{nextAction}}</md-checkbox>
+            <md-checkbox v-model="nextAction.completed" v-show='!showNextActionTextBox'>{{nextAction.name}}</md-checkbox>
             <md-field v-show='showNextActionTextBox'>
               <label>Next Action</label>
-              <md-input v-model="nextAction"  @keyup.enter="closeNextActionTextBox"></md-input>
+              <md-input v-model="nextAction.name"  @keyup.enter="closeNextActionTextBox"></md-input>
             </md-field>
           </div>
         <div class="md-layout-item" @click='editNextAction'>
@@ -87,7 +87,7 @@
         </div>
         <div class="md-layout">
           <div class="md-layout-item">
-            <md-button class="md-raised" :disabled='!nextActionCheckbox'>Create Action</md-button>
+            <md-button class="md-raised" :disabled='!nextAction.completed'>Create Action</md-button>
           </div>
           <div class="md-layout-item">
             <md-button class="md-raised" @click="deleteLastAction">Delete Action</md-button>
@@ -99,7 +99,7 @@
         <md-tooltip md-direction="top">Make this action a project</md-tooltip>
         <md-dialog-prompt class='create-project-dialog'
           :md-active.sync="showNewChildProjectDialog"
-          v-model="nextAction"
+          v-model="nextAction.name"
           md-title="Project Name"
           md-input-maxlength="40"
           md-input-placeholder="Type the project's name"
@@ -120,6 +120,7 @@
   import VueMarkdown from 'vue-markdown';
   import MarkdownCheatsheet from './MarkdownCheatsheet';
   import fs from 'fs';
+  import io from './io';
   //const fs = require('fs');
 
 Vue.directive('click-outside', {
@@ -149,10 +150,13 @@ Vue.directive('click-outside', {
         showSidepanel: false,
         currenctAbstract: 'foo bar',
         showAbstractTextArea: false,
-        showNextActionTextBox: false,
-        nextActionCheckbox: false,
+        showNextActionTextBox: true,
         showNewChildProjectDialog: false,
-        nextAction: '',
+        nextAction: {
+          name: null,
+          completed: false,
+          date: null
+        },
       }
     },
     methods: {
@@ -225,9 +229,14 @@ Vue.directive('click-outside', {
             let result = splitArray.join('\n');
             fs.writeFile(actions_file_path, result);
         });
-        this.nextActionCheckbox = false;
+        this.resetNextActionField();
+      },
+      resetNextActionField(){
+        this.nextAction.name = null;
+        this.nextAction.completed = false;
+        this.nextAction.date = null;
         this.showNextActionTextBox = true;
-        this.nextAction = null;
+        return true;
       },
       createSubProject(value) {
         this.createProject(value);
@@ -248,7 +257,7 @@ Vue.directive('click-outside', {
                 if (err) console.log('error');
                 else console.log('attachments dir created');
                 fs.closeSync(fs.openSync(sub_project_root+'/abstract.md', 'a'));
-                fs.closeSync(fs.openSync(sub_project_root+'/actions.txt', 'a'));
+                fs.closeSync(fs.openSync(sub_project_root+'/actions.act', 'a'));
                 fs.closeSync(fs.openSync(attachments_dir+'/links.txt', 'a'));
             });
             if(name.includes('brainstorming')){
@@ -272,42 +281,19 @@ Vue.directive('click-outside', {
       },
       fetchLastAction(path) {
         let self = this;
-          let action_txt = null;
-          fs.readFile(path, function(err,data){
-              if(!err){
-                try {
-                  action_txt = data.toString().split('\n');
-                } catch (error) {
-                  self.nextAction = null;
-                  self.showNextActionTextBox = true;
-                  return;
-                }
-              }
-              console.log(action_txt);
+        let actions = io.readActionsFile(path);
+        console.log(actions);
+        
+        if(actions && actions.length>0){
+          let last_action = actions.pop();
+          if(last_action.name && last_action.date){
+            console.log(last_action);
 
-              if (action_txt == null || action_txt[0] == '') {
-                self.showNextActionTextBox = true;
-                self.nextAction = null;
-                return;
-              }
-              let next_action = action_txt[action_txt.length-1];
-              if(next_action == ''){
-                next_action = action_txt[action_txt.length-2];
-              }
-              let next_action_checkbox = next_action.split(']')[0];
-              if(next_action_checkbox.length >= 2){
-                self.nextActionCheckbox = true;
-              }else{
-                self.nextActionCheckbox = false;
-              }
-
-              self.nextAction = next_action.substring(
-                  next_action.lastIndexOf("]") + 1,
-                  next_action.lastIndexOf("//")
-              );
-              //self.currenctAbstract = abstract_txt;
-
-          });
+            self.nextAction = last_action;
+          }
+        }else{
+          self.resetNextActionField();
+        }
       },
     },
     computed: mapState({
@@ -342,7 +328,7 @@ Vue.directive('click-outside', {
           }
         },
         nextAction(oldValue, newValue) {
-          if(!newValue){
+          if(newValue.name == null && newValue.date == null){
             this.showNextActionTextBox = true;
           }else{
             // write next action to file
